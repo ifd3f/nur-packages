@@ -7,4 +7,5 @@
   overlays = import ./overlays; # nixpkgs overlays
 
   intiface-desktop = pkgs.callPackage ./pkgs/intiface-desktop { };
+  intiface-nix-patcher = pkgs.callPackage ./pkgs/intiface-nix-patcher { };
 }
