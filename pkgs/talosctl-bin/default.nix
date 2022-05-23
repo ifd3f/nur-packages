@@ -11,7 +11,7 @@ let
   os = lib.toLower "${systemInfo.uname.system}";
 in stdenvNoCC.mkDerivation rec {
   inherit version;
-  pname = "talosctl";
+  pname = "talosctl-bin";
   src = fetchurl {
     inherit sha256;
     url =
@@ -30,6 +30,7 @@ in stdenvNoCC.mkDerivation rec {
     description = "The Kubernetes Operating System";
     homepage = "https://www.talos.dev/";
     license = licenses.mpl20;
+    mainProgram = "talosctl";
     platforms = [
       "aarch64-darwin"
       "aarch64-linux"
