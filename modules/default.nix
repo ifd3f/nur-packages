@@ -1,3 +1,3 @@
 {
-  pleroma-ebooks = import ./pleroma-ebooks.nix;
+  pleroma-ebooks = ./pleroma-ebooks.nix;
 }
