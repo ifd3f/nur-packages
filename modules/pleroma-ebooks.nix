@@ -1,12 +1,26 @@
 { config, lib, pkgs, ... }:
 with lib;
-let cfg = config.services.pleroma-ebooks;
+let
+  cfg = config.services.pleroma-ebooks;
+  defaultUser = "pleroma-ebooks";
 in {
   options.services.pleroma-ebooks.bots = let
     botOpts = { name, ... }:
       let botCfg = cfg.${name};
       in {
         options = {
+          user = mkOption {
+            type = types.str;
+            description = "(Linux) User to run under";
+            default = defaultUser;
+          };
+
+          group = mkOption {
+            type = types.str;
+            description = "Group to run under";
+            default = defaultUser;
+          };
+
           accessTokenFile = mkOption {
             description = ''
               Path to access token file.
@@ -20,7 +34,7 @@ in {
           dbPath = mkOption {
             description = "Path to store the database";
             type = types.str;
-            default = "/var/lib/pleroma-ebooks/${name}";
+            default = "/var/lib/pleroma-ebooks/${name}.db";
           };
 
           site = mkOption {
@@ -93,33 +107,49 @@ in {
       unitName = "pleroma-ebooks-${name}";
       baseConfigJSON = pkgs.writeText "pleroma-ebooks-${name}-config.json"
         (builtins.toJSON botCfg.config);
+
       generate-pleroma-ebooks-config = pkgs.writeShellApplication {
         name = "generate-pleroma-ebooks-config";
-        runtimeInputs = with pkgs; [ coreutils jq pleroma-ebooks ];
-        text = ''
+        runtimeInputs = with pkgs; [ coreutils jq ];
+        text = with botCfg; ''
           config="$(mktemp)"
           chmod 600 "$config"
 
-          access_token="$(cat "$ACCESS_TOKEN_FILE")"
-          jq --arg token "$access_token" '. + {access_token: $token}' < "$BASE_CONFIG_FILE" > "$config"
+          access_token="$(cat ${accessTokenFile})"
+          jq --arg token "$access_token" '. + {access_token: $token}' < ${baseConfigJSON} > "$config"
 
           echo "$config"
         '';
       };
     in {
+      systemd.services."${unitName}-config" = {
+        description = "Set up ${unitName} required directories";
+        environment = { inherit (cfg) user group accessTokenFile dbPath; };
+
+        script = ''
+          mkdir -p "$(dirname "$accessTokenFile")"
+          chown -R "$user:$group" "$(dirname "$accessTokenFile")"
+
+          mkdir -p "$(dirname "$dbPath")"
+          chown -R "$user:$group" "$(dirname "$dbPath")"
+        '';
+      };
+
       systemd.services."${unitName}-post" = {
         wantedBy = [ "network-online.target" ];
         path = with pkgs; [ generate-pleroma-ebooks-config pleroma-ebooks ];
-        environment = {
-          ACCESS_TOKEN_FILE = botCfg.accessTokenFile;
-          BASE_CONFIG_FILE = baseConfigJSON;
-        };
         unitConfig.ConditionPathExists = botCfg.accessTokenFile;
+
         script = ''
           config="$(generate-pleroma-ebooks-config)"
           gen.py -c "$config"
           rm "$config"
         '';
+
+        serviceConfig = {
+          User = botCfg.user;
+          Group = botCfg.group;
+        };
       };
       systemd.timers."${unitName}-post" = {
         wantedBy = [ "network-online.target" ];
@@ -129,21 +159,33 @@ in {
       systemd.services."${unitName}-fetch" = {
         wantedBy = [ "network-online.target" ];
         path = with pkgs; [ generate-pleroma-ebooks-config pleroma-ebooks ];
-        environment = {
-          ACCESS_TOKEN_FILE = botCfg.accessTokenFile;
-          BASE_CONFIG_FILE = baseConfigJSON;
-        };
         unitConfig.ConditionPathExists = botCfg.accessTokenFile;
+
         script = ''
           config="$(generate-pleroma-ebooks-config)"
           fetch-posts.py -c "$config"
           rm "$config"
         '';
+
+        serviceConfig = {
+          User = botCfg.user;
+          Group = botCfg.group;
+        };
       };
       systemd.timers."${unitName}-fetch" = {
         wantedBy = [ "network-online.target" ];
         timerConfig.OnCalendar = botCfg.fetchOnCalendar;
       };
+
+      users.users = optionalAttrs (cfg.user == defaultUser) {
+        ${defaultUser} = {
+          group = cfg.group;
+          isSystemUser = true;
+        };
+      };
+
+      users.groups =
+        optionalAttrs (cfg.group == defaultUser) { ${defaultUser} = { }; };
     }) cfg.bots);
 }
 
