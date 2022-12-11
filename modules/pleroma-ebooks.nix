@@ -40,13 +40,6 @@ in {
           type = types.str;
         };
 
-        fetchOnCalendar = mkOption {
-          description =
-            "How often to fetch. See systemd.time(7) for more information about the format.";
-          type = types.str;
-          default = "hourly";
-        };
-
         postOnCalendar = mkOption {
           description =
             "How often to post. See systemd.time(7) for more information about the format.";
@@ -135,31 +128,16 @@ in {
           '';
         };
 
-        "${unitName}-post" = {
+        "${unitName}" = {
           wantedBy = [ "network-online.target" ];
           path = with pkgs; [ generate-pleroma-ebooks-config pleroma-ebooks ];
           unitConfig.ConditionPathExists = botCfg.accessTokenFile;
 
           script = ''
-            config="$(generate-pleroma-ebooks-config)"
-            gen.py -c "$config"
-            rm "$config"
-          '';
-
-          serviceConfig = {
-            User = botCfg.user;
-            Group = botCfg.group;
-          };
-        };
-
-        "${unitName}-fetch" = {
-          wantedBy = [ "network-online.target" ];
-          path = with pkgs; [ generate-pleroma-ebooks-config pleroma-ebooks ];
-          unitConfig.ConditionPathExists = botCfg.accessTokenFile;
-
-          script = ''
+            cd ${pkgs.pleroma-ebooks}/bin
             config="$(generate-pleroma-ebooks-config)"
             fetch_posts.py -c "$config"
+            gen.py -c "$config"
             rm "$config"
           '';
 
@@ -170,16 +148,9 @@ in {
         };
       };
 
-      timers = {
-        "${unitName}-post" = {
-          wantedBy = [ "network-online.target" ];
-          timerConfig.OnCalendar = botCfg.postOnCalendar;
-        };
-
-        "${unitName}-fetch" = {
-          wantedBy = [ "network-online.target" ];
-          timerConfig.OnCalendar = botCfg.fetchOnCalendar;
-        };
+      timers."${unitName}" = {
+        wantedBy = [ "network-online.target" ];
+        timerConfig.OnCalendar = botCfg.postOnCalendar;
       };
     }) cfg.bots);
 
