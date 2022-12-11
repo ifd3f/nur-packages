@@ -159,7 +159,7 @@ in {
 
           script = ''
             config="$(generate-pleroma-ebooks-config)"
-            fetch-posts.py -c "$config"
+            fetch_posts.py -c "$config"
             rm "$config"
           '';
 
